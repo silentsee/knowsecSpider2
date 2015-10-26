@@ -137,6 +137,9 @@ class showProgress(threading.Thread):
 
 
 class spider(threading.Thread):
+    """
+    爬虫线程，死循环，从queue中获取job，
+    """
     def __init__(self, QLinks, key, rlock):
         threading.Thread.__init__(self)
         self.queue = QLinks
@@ -151,27 +154,27 @@ class spider(threading.Thread):
     def run(self):
         while True:
             try:
-                self.link, self.deep = self.queue.get(timeout=2)
+                self.link, self.deep = self.queue.get(timeout=2)#获取爬虫的开始url以及当前深度，2秒获取不到job则continue
                 self.key = self.keyList[0]
             except queue.Empty:
                 continue
-            if self.deep > 0:
+            if self.deep > 0: #深度大于0，向子url继续爬
                 self.deep -= 1
                 links = self.getLinks()
                 if links:
                     for i in links:
-                        global urls
+                        global urls #这是一个保存所有已经爬到的url的set（集合：不包含重复元素）
                         if i not in urls:
-                            urls.add(i)
-                            self.queue.put((i, self.deep))
-                self.queue.put((self.link, 0))
-            else:
-                if not self.key:
+                            urls.add(i) #将爬到的url插入集合
+                            self.queue.put((i, self.deep))#将url和深度，放入工作队列，将来爬到数据后放入数据库或者文件
+                self.queue.put((self.link, 0)) #当前url没有子url，表示深度没有降到最深，但是已经触底，则将当前url和深度0放入工作队列
+            else:#深度>=0,则表示搜索触底，开始爬数据
+                if not self.key:#没设置关键字
                     self.download2File()
-                else:
+                else: #设置了关键字
                     self.download2DB()
                 logging.info(self.link+'  ['+str(self.deep)+']')
-            self.queue.task_done()
+            self.queue.task_done() #表示当前从queue中get到的job已经完成，当queue中最后一个job完成，则唤醒主线程
 
     #没有设定关键词的时候，下载到本地目录下
     def download2File(self):
@@ -230,11 +233,15 @@ class spider(threading.Thread):
 
 
 class threadPool:
+    """
+    线程池是一个由num个并发线程，以及一个event对象组成的对象
+
+    """
     def __init__(self, num, event):
         self.num = num
         self.event = event
         self.threads = []
-        self.queue = queue.Queue()
+        self.queue = queue.Queue() #queue是一个同步的FIFO队列，用于维护job，实际就是一个工作队列，无容量限制
         self.key = [None]
         self.createThread()
 
@@ -250,18 +257,22 @@ class threadPool:
         return self.queue
 
     def wait(self):
-        self.queue.join()
+        """
+        由mainHandler调用，用于阻塞阻塞主线程，直到queue中的job全部完成
+        :return:
+        """
+        self.queue.join()#阻塞
         self.event.set()  # 通知显示模块程序结束，关闭进度显示
 
 
 #主控制程序
 def mainHandler(threadNum, link, deep, key, test):
-    event = threading.Event()
-    event.clear()
-    pool = threadPool(threadNum, event)
+    event = threading.Event()#产生一个event对象，对象维护一个flag，当
+    event.clear()#将event的flag设为false
+    pool = threadPool(threadNum, event)#初始化一个threadNum个线程的线程池，event对象用于通知主线程继续执行
     showProgress(pool.getQueue(), deep, event)
-    pool.putJob((link, deep), key)
-    pool.wait()
+    pool.putJob((link, deep), key)# job是(link,deep)的一个tuple，key是关键字
+    pool.wait()#阻塞主线程
     if test:  # 需要自测模块运行
         import test
         test.test(key, dbFile)
@@ -338,4 +349,4 @@ if __name__ == '__main__':
     deep -= 1
     urls = set()  # 防止抓取重复URL
     fileMD5 = set()  # 保存文件的MD5值防止url不同但内容相同的文件重复下载
-    mainHandler(threadNum, url, deep, key, 'test`self' in args)
+    mainHandler(threadNum, url, deep, key, 'test`self' in args)#线程数，爬虫开始地址，深度，关键字，可选项）
