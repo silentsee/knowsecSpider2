@@ -73,3 +73,6 @@ python3 spider.py -u url -d deep -f logfile -l loglevel(1-5)  --testself -thread
 * 改进格式
 * 改进异常处理
 * 把urls（保存url，防止下载同名url）和fileMD5（保存文件md5值，防止不同名相同内容重复下载）两个list改成set，查询效率提升为O(1)
+
+##当前bug：
+＊以www.sina.com.cn为起点，抓去到的网页为乱码
