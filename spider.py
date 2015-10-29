@@ -20,10 +20,15 @@ import logging
 import lxml.html
 
 
-class SameFileError(Exception): pass
-class NoneTypeError(Exception): pass
+class SameFileError(Exception):
+    pass
 
-#初始化数据库，如果不存在该文件则创建并新增一个表格
+
+class NoneTypeError(Exception):
+    pass
+
+
+# 初始化数据库，如果不存在该文件则创建并新增一个表格
 def _initDB(dbFile):
     exist = False
     ls = os.listdir('.')
@@ -37,27 +42,29 @@ def _initDB(dbFile):
                     url text,key text,content text)')
             db.commit()
         except sqlite3.OperationalError:
-            logging.cratical(dbFile+' 创建表格错误')
+            logging.cratical(dbFile + ' 创建表格错误')
     return db, c
 
 
-#向数据库表格中插入链接、关键词、网页全文
+# 向数据库表格中插入链接、关键词、网页全文
 def _insert(url, key, content):
+
     try:
         content = content.decode('gbk')
     except UnicodeDecodeError:
         content = content.decode('utf8', 'ignore')
-        logging.debug(url+' 链接是UTF-8编码')
+        logging.debug(url + ' 链接是UTF-8编码')
+    logging.warning("content: "+content)
     content = urllib.parse.quote(content)
     try:
         c.execute('insert into spider(url,key,content) values(\
-                "'+url+'","'+key+'","'+content+'")')
+                "' + url + '","' + key + '","' + content + '")')
         db.commit()
     except sqlite3.OperationalError:
-        logging.critical('插入 '+url+' 数据错误')
+        logging.critical('插入 ' + url + ' 数据错误')
 
 
-#请求一个链接，返回HTTP类型、主机Host名、页面的二进制数据
+# 请求一个链接，返回HTTP类型、主机Host名、页面的二进制数据
 def _requestData(url):
     headers = {
         'Connection': 'keep-alive',
@@ -72,27 +79,28 @@ def _requestData(url):
     try:
         res = urllib.request.urlopen(req, timeout=5).read()
     except:
-        logging.error('打开'+url+'链接失败')
+        logging.error('打开' + url + '链接失败')
         return req.type, req.host, None
     return req.type, req.host, res
 
 
-#处理文本内容不一样但名字一样的情况
+# 处理文本内容不一样但名字一样的情况
 def _dealSameFileName(name):
     try:
-        files=os.listdir('.')
+        files = os.listdir('.')
     except:
         logging.error('无法读取本目录下的文件')
         exit()
-    count=1
+    count = 1
     while True:
         if name in files:
-            name='.'.join([name,str(count)])
-            count+=1
+            name = '.'.join([name, str(count)])
+            count += 1
         else:
             return name
 
-#显示进度信息
+
+# 显示进度信息
 class showProgress(threading.Thread):
     def __init__(self, QLinks, deep, event):
         threading.Thread.__init__(self)
@@ -106,25 +114,25 @@ class showProgress(threading.Thread):
             print('level 1 :', 1, '/', 1)
             return
         screen = curses.initscr()  # 初始化终端界面输出窗口
-        maxFile = [0] * (self.deep+1)
+        maxFile = [0] * (self.deep + 1)
         while True:
             links = list(self.QLinks.__dict__['queue'])
-            #队列中每个URL此时的深度值
+            # 队列中每个URL此时的深度值
             deeps = [x[1] for x in links]
             '''keys中元素是[deep值,次数]，
             deep=0为最里子层，deep=n-1为父层'''
-            keys = [[x, 0] for x in range(self.deep+1)]
+            keys = [[x, 0] for x in range(self.deep + 1)]
             n = len(keys)
             for d in deeps:
                 keys[d][1] += 1
             screen.clear()  # 清屏，等待输出
             count = 0
-            for d in range(1, n+1):
+            for d in range(1, n + 1):
                 count += 1
-                if keys[n-d][1] > maxFile[d-1]:
-                    maxFile[d-1] = keys[n-d][1]
+                if keys[n - d][1] > maxFile[d - 1]:
+                    maxFile[d - 1] = keys[n - d][1]
                 screen.addstr(count, 0, 'level ' + str(d) + ' : ' +
-                              str(keys[n-d][1])+' / '+str(maxFile[d-1]))
+                              str(keys[n - d][1]) + ' / ' + str(maxFile[d - 1]))
             screen.refresh()  # 使生效
             time.sleep(0.2)
             total = functools.reduce(lambda x, y: x + y,
@@ -132,7 +140,7 @@ class showProgress(threading.Thread):
             totalMax = functools.reduce(lambda x, y: x + y, maxFile)
             if self.event.is_set():
                 curses.endwin()
-                logging.info('Done at '+time.ctime())
+                logging.info('Done at ' + time.ctime())
                 break
 
 
@@ -140,6 +148,7 @@ class spider(threading.Thread):
     """
     爬虫线程，死循环，从queue中获取job，
     """
+
     def __init__(self, QLinks, key, rlock):
         threading.Thread.__init__(self)
         self.queue = QLinks
@@ -148,35 +157,35 @@ class spider(threading.Thread):
         self.link = None
         self.deep = None
         self.key = None
-        self.setDaemon(True)  # 父线程结束后，子线程也相应结束
+        self.setDaemon(True)  # 父线程结束后，子线程也相应结束，死循环没有退出，由父线程退出
         self.start()
 
     def run(self):
         while True:
             try:
-                self.link, self.deep = self.queue.get(timeout=2)#获取爬虫的开始url以及当前深度，2秒获取不到job则continue
+                self.link, self.deep = self.queue.get(timeout=2)  # 获取爬虫的开始url以及当前深度，2秒获取不到job则continue
                 self.key = self.keyList[0]
             except queue.Empty:
                 continue
-            if self.deep > 0: #深度大于0，向子url继续爬
+            if self.deep > 0:  # 深度大于0，向子url继续爬
                 self.deep -= 1
                 links = self.getLinks()
                 if links:
                     for i in links:
-                        global urls #这是一个保存所有已经爬到的url的set（集合：不包含重复元素）
+                        global urls  # 这是一个保存所有已经爬到的url的set（集合：不包含重复元素）
                         if i not in urls:
-                            urls.add(i) #将爬到的url插入集合
-                            self.queue.put((i, self.deep))#将url和深度，放入工作队列，将来爬到数据后放入数据库或者文件
-                self.queue.put((self.link, 0)) #当前url没有子url，表示深度没有降到最深，但是已经触底，则将当前url和深度0放入工作队列
-            else:#深度>=0,则表示搜索触底，开始爬数据
-                if not self.key:#没设置关键字
+                            urls.add(i)  # 将爬到的url插入集合
+                            self.queue.put((i, self.deep))  # 将url和深度，放入工作队列，将来爬到数据后放入数据库或者文件
+                self.queue.put((self.link, 0))  # 当前url没有子url，表示深度没有降到最深，但是已经触底，则将当前url和深度0放入工作队列
+            else:  # 深度>=0,则表示搜索触底，开始爬数据
+                if not self.key:  # 没设置关键字
                     self.download2File()
-                else: #设置了关键字
+                else:  # 设置了关键字
                     self.download2DB()
-                logging.info(self.link+'  ['+str(self.deep)+']')
-            self.queue.task_done() #表示当前从queue中get到的job已经完成，当queue中最后一个job完成，则唤醒主线程
+                logging.info(self.link + '  [' + str(self.deep) + ']')
+            self.queue.task_done()  # 表示当前从queue中get到的job已经完成，当queue中最后一个job完成，则唤醒主线程
 
-    #没有设定关键词的时候，下载到本地目录下
+    # 没有设定关键词的时候，下载到本地目录下
     def download2File(self):
         name = urllib.parse.quote(self.link)
         name = name.replace('/', '_')
@@ -192,9 +201,9 @@ class spider(threading.Thread):
                 with open(name, 'wb') as f:
                     f.write(data)
         except SameFileError:
-            logging.info(self.link+' 出现相同的内容，已丢弃')
+            logging.info(self.link + ' 出现相同的内容，已丢弃')
 
-    #设定关键词的时候，把查询到关键词的网页保存到数据库中
+    # 设定关键词的时候，把查询到关键词的网页保存到数据库中
     def download2DB(self):
         data = _requestData(self.link)[2]
         if not data:
@@ -208,7 +217,7 @@ class spider(threading.Thread):
             _insert(self.link, self.key, data)
             self.rlock.release()
 
-    #找出一个URL页面中所有不重复的且正确的子URL
+    # 找出一个URL页面中所有不重复的且正确的子URL
     def getLinks(self):
         try:
             resType, resHost, resData = _requestData(self.link)
@@ -220,7 +229,7 @@ class spider(threading.Thread):
             data = resData.decode('gbk')
         except UnicodeDecodeError:
             data = resData.decode('utf8', 'ignore')
-        host = resType+'://'+resHost
+        host = resType + '://' + resHost
         doc = lxml.html.document_fromstring(data)
         tags = ['a', 'iframe', 'frame']
         doc.make_links_absolute(host)
@@ -237,11 +246,12 @@ class threadPool:
     线程池是一个由num个并发线程，以及一个event对象组成的对象
 
     """
+
     def __init__(self, num, event):
         self.num = num
         self.event = event
         self.threads = []
-        self.queue = queue.Queue() #queue是一个同步的FIFO队列，用于维护job，实际就是一个工作队列，无容量限制
+        self.queue = queue.Queue()  # queue是一个同步的FIFO队列，用于维护job，实际就是一个工作队列，无容量限制
         self.key = [None]
         self.createThread()
 
@@ -261,24 +271,24 @@ class threadPool:
         由mainHandler调用，用于阻塞阻塞主线程，直到queue中的job全部完成
         :return:
         """
-        self.queue.join()#阻塞
+        self.queue.join()  # 阻塞
         self.event.set()  # 通知显示模块程序结束，关闭进度显示
 
 
-#主控制程序
+# 主控制程序
 def mainHandler(threadNum, link, deep, key, test):
-    event = threading.Event()#产生一个event对象，对象维护一个flag，当
-    event.clear()#将event的flag设为false
-    pool = threadPool(threadNum, event)#初始化一个threadNum个线程的线程池，event对象用于通知主线程继续执行
+    event = threading.Event()  # 产生一个event对象，对象维护一个flag，当
+    event.clear()  # 将event的flag设为false
+    pool = threadPool(threadNum, event)  # 初始化一个threadNum个线程的线程池，event对象用于通知主线程继续执行
     showProgress(pool.getQueue(), deep, event)
-    pool.putJob((link, deep), key)# job是(link,deep)的一个tuple，key是关键字
-    pool.wait()#阻塞主线程
+    pool.putJob((link, deep), key)  # job是(link,deep)的一个tuple，key是关键字
+    pool.wait()  # 阻塞主线程
     if test:  # 需要自测模块运行
         import test
         test.test(key, dbFile)
 
 
-#用法说明
+# 用法说明
 def _usage():
     print('''spider v0.4 --littlethunder
 用法：python3 spider.py -u [URL] -d [Deep] -f [Log File]\
@@ -296,6 +306,7 @@ def _usage():
 --key  [Key Word] 页面内的关键词，如果指定该项则会把数据\
 保存在数据库中，否则默认下载网页到本地目录
 testself  程序自测，可选参数''')
+
 
 if __name__ == '__main__':
     rlock = threading.RLock()
@@ -339,14 +350,14 @@ if __name__ == '__main__':
     if key:
         db, c = _initDB(dbFile)
     logLevel = {  # 日志级别，1最不详细，5最详细
-        1: logging.CRITICAL,
-        2: logging.ERROR,
-        3: logging.WARNING,
-        4: logging.INFO,
-        5: logging.DEBUG,
-    }
+                  1: logging.CRITICAL,
+                  2: logging.ERROR,
+                  3: logging.WARNING,
+                  4: logging.INFO,
+                  5: logging.DEBUG,
+                  }
     logging.basicConfig(filename=logFile, level=logLevel[level])
     deep -= 1
     urls = set()  # 防止抓取重复URL
     fileMD5 = set()  # 保存文件的MD5值防止url不同但内容相同的文件重复下载
-    mainHandler(threadNum, url, deep, key, 'test`self' in args)#线程数，爬虫开始地址，深度，关键字，可选项）
+    mainHandler(threadNum, url, deep, key, 'test`self' in args)  # 线程数，爬虫开始地址，深度，关键字，可选项）

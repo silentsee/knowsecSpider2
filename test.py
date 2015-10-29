@@ -9,7 +9,12 @@ import threading
 import sqlite3
 import hashlib
 import os
-from progressbar import *
+#from progressbar import *
+from spider import _requestData
+import lxml
+import urllib
+from gzip import *
+from io import StringIO
 
 
 #生成数据库中保存的所有HTML页面的MD5值列表
@@ -85,5 +90,25 @@ def test(key, dbFile):
     else:
         print('爬取了“重复”的HTML页面，请修改代码！')
 
+def unzip(data):
+        data = StringIO(data)
+        gz = GzipFile(fileobj=data)
+        data = gz.read()
+        gz.close()
+        return data
+
+def test_requestData(url):
+    resType, resHost, resData = _requestData(url)
+    assert resData is not None
+    try:
+        resData = unzip(resData)
+        data = resData.decode('gbk')
+    except UnicodeDecodeError:
+        data = resData.decode('utf8', 'ignore')
+    host = resType + '://' + resHost
+    print(data)
+
 if __name__ == '__main__':
-    test('科学', 'spider.db')
+    #test('科学', 'spider.db')
+    url = "http://www.sina.com.cn"
+    test_requestData(url)
